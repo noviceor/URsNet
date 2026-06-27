@@ -1,2 +1,2 @@
-# UDRsNet
-UDRsNet: Unsupervised Deep Remote Sensing Stitching Network for UAV Images
+# URsNet
+URsNet: Unsupervised Remote Sensing Stitching Network for low-altitude UAV Images
