@@ -1,20 +1,20 @@
-MLLM-Based Stitching Quality Evaluation Protocol
+# MLLM-Based Stitching Quality Evaluation Protocol
 
 This document provides the implementation details of the MLLM-based evaluation protocol used in URsNet. It is intended to make the prompt, scoring procedure, model settings, and reported results reproducible.
 
-1. Motivation
+## 1. Motivation
 
 Image stitching quality is not fully captured by pixel-level metrics such as PSNR and SSIM, especially when no dense ground-truth correspondence is available. Visible stitching failures often include ghosting, local misalignment, seam artifacts, inconsistent illumination, texture discontinuity, and structural deformation.
 
 We therefore use multimodal large language models (MLLMs) as an auxiliary no-reference perceptual evaluation tool. The goal is not to replace conventional metrics, but to provide a complementary assessment that is closer to human visual judgment and that can describe stitching defects in interpretable dimensions.
 
-2. Evaluation Pipeline
+## 2. Evaluation Pipeline
 
 For each stitched image, the evaluation follows a fixed protocol:
 
 1. Pair the image with a fixed prompt template.
 2. Submit the prompt and the encoded stitched image to an MLLM.
-3. Require the model to output exactly two parts: Reason and Score.
+3. Require the model to output exactly two parts: `Reason` and `Score`.
 4. Parse the structured score into four dimensions:
    - Artifacts
    - Illumination Consistency
@@ -25,118 +25,130 @@ For each stitched image, the evaluation follows a fixed protocol:
 
 The prompt template and input format are kept fixed across all models, methods, and samples. No per-image prompt tuning is used.
 
-3. Model Settings
+## 3. Model Settings
 
 Three mainstream vision-language models are used to reduce the dependence on any single evaluator:
 
-  Model     	Sampling setting                  
-  GLM-4.5V  	temperature = 1.0, top_p ~= 0.9   
-  GPT-5-nano	default setting, temperature = 1.0
-  Qwen2.5-VL	temperature = 0.1, top_p = 0.001  
+| Model | Sampling setting |
+|---|---|
+| GLM-4.5V | temperature = 1.0, top_p ~= 0.9 |
+| GPT-5-nano | default setting, temperature = 1.0 |
+| Qwen2.5-VL | temperature = 0.1, top_p = 0.001 |
 
 The scores from different models are reported separately instead of being merged into a single aggregated score. This preserves the per-model and per-dimension information and allows the consistency of rankings across models to be inspected directly.
 
-4. Prompt Design
+## 4. Prompt Design
 
 The prompt decomposes stitching quality into four independently assessable dimensions. Each dimension has equal weight and is defined by observable visual phenomena. This design reduces scoring ambiguity and avoids relying on a vague holistic judgment.
 
 The four dimensions are:
 
-  Dimension               	Weight	Purpose                                 
-  Artifacts               	   25%	Detect ghosting, duplicated content, misalignment artifacts, and dynamic-object handling failures.
-  Illumination Consistency	   25%	Evaluate whether brightness, exposure, and color transitions are natural.
-  Detail Continuity       	   25%	Check whether textures and fine structures remain continuous across stitched regions.
-  Structural Coherence    	   25%	Assess whether roads, buildings, boundaries, and other geometric structures remain coherent.
+| Dimension | Weight | Purpose |
+|---|---:|---|
+| Artifacts | 25% | Detect ghosting, duplicated content, misalignment artifacts, and dynamic-object handling failures. |
+| Illumination Consistency | 25% | Evaluate whether brightness, exposure, and color transitions are natural. |
+| Detail Continuity | 25% | Check whether textures and fine structures remain continuous across stitched regions. |
+| Structural Coherence | 25% | Assess whether roads, buildings, boundaries, and other geometric structures remain coherent. |
 
 The rubric uses anchored score levels. Each score level is tied to visible phenomena, which helps reduce scale drift across different models and images.
 
-5. Complete Prompt
+## 5. Complete Prompt
 
-System Prompt
+### System Prompt
 
-    You are now an image stitching quality assessment tool. Score the stitched
-    image according to the Input Prompt. Your output must contain exactly two
-    parts: Reason and Score.
-    
-    In the Reason part, explain the basis for your judgment on each dimension.
-    
-    In the Score part, strictly follow this format:
-    Artifacts: <int>, Illumination: <int>, Detail: <int>, Structural Coherence: <int>
+```text
+You are now an image stitching quality assessment tool. Score the stitched
+image according to the Input Prompt. Your output must contain exactly two
+parts: Reason and Score.
 
-Input Prompt
+In the Reason part, explain the basis for your judgment on each dimension.
 
-    The evaluation dimensions and corresponding scoring criteria are as follows:
-    
-    (1) Artifacts (25%): Defined as visual anomalies caused by misalignment or
-        poorly handled dynamic objects.
-        1 point: Severe ghosting, misalignment, or duplicated content.
-        3 points: Minor artifacts visible upon close inspection.
-        5 points: Natural handling of dynamic content with no visible artifacts.
-    
-    (2) Illumination Consistency (25%): Defined as consistency in lighting and color.
-        1 point: Significant differences in exposure or color temperature.
-        3 points: Local inconsistencies but overall coherence.
-        5 points: Full consistency in lighting direction, intensity, and color.
-    
-    (3) Detail Continuity (25%): Defined as the seamlessness of texture and fine
-        structural details.
-        1 point: Visible breaks or cloning artifacts.
-        3 points: Generally continuous with minor discontinuities noticeable under
-                  magnification.
-        5 points: Fully preserved, native-level details.
-    
-    (4) Structural Coherence (25%): Assesses the naturalness and integrity of key
-        geometric structures in the stitched image.
-        1 point: Noticeable structural breaks or misalignments.
-        3 points: A single subtle issue visible upon close inspection.
-        5 points: Fully coherent structures with no visible breaks or distortions.
+In the Score part, strictly follow this format:
+Artifacts: <int>, Illumination: <int>, Detail: <int>, Structural Coherence: <int>
+```
 
-6. Expected Output Format
+### Input Prompt
+
+```text
+The evaluation dimensions and corresponding scoring criteria are as follows:
+
+(1) Artifacts (25%): Defined as visual anomalies caused by misalignment or
+    poorly handled dynamic objects.
+    1 point: Severe ghosting, misalignment, or duplicated content.
+    3 points: Minor artifacts visible upon close inspection.
+    5 points: Natural handling of dynamic content with no visible artifacts.
+
+(2) Illumination Consistency (25%): Defined as consistency in lighting and color.
+    1 point: Significant differences in exposure or color temperature.
+    3 points: Local inconsistencies but overall coherence.
+    5 points: Full consistency in lighting direction, intensity, and color.
+
+(3) Detail Continuity (25%): Defined as the seamlessness of texture and fine
+    structural details.
+    1 point: Visible breaks or cloning artifacts.
+    3 points: Generally continuous with minor discontinuities noticeable under
+              magnification.
+    5 points: Fully preserved, native-level details.
+
+(4) Structural Coherence (25%): Assesses the naturalness and integrity of key
+    geometric structures in the stitched image.
+    1 point: Noticeable structural breaks or misalignments.
+    3 points: A single subtle issue visible upon close inspection.
+    5 points: Fully coherent structures with no visible breaks or distortions.
+```
+
+## 6. Expected Output Format
 
 The model output must contain a short explanation and a structured score. A representative output is shown below:
 
-    Reason: The image exhibits minor issues in terms of artifacts, illumination
-    consistency, and detail continuity, all of which are only noticeable upon close
-    inspection (scores: 3, 3, 3). For structural coherence, only slight deviations
-    are visible under magnification, warranting a score of 4.
-    
-    Score: Artifacts: 3, Illumination: 3, Detail: 3, Structural Coherence: 4
+```text
+Reason: The image exhibits minor issues in terms of artifacts, illumination
+consistency, and detail continuity, all of which are only noticeable upon close
+inspection (scores: 3, 3, 3). For structural coherence, only slight deviations
+are visible under magnification, warranting a score of 4.
 
-The Reason field is used for qualitative inspection and error analysis. The Score field is parsed automatically to compute the final quantitative scores.
+Score: Artifacts: 3, Illumination: 3, Detail: 3, Structural Coherence: 4
+```
 
-7. Scoring and Reporting
+The `Reason` field is used for qualitative inspection and error analysis. The `Score` field is parsed automatically to compute the final quantitative scores.
+
+## 7. Scoring and Reporting
 
 For each image, the total score is computed as:
 
-    Total = (Artifacts + Illumination + Detail + Structural Coherence) / 4
+```text
+Total = (Artifacts + Illumination + Detail + Structural Coherence) / 4
+```
 
 Although each individual model response uses integer scores, dataset-level averages are reported as decimal values. Results are reported for each MLLM independently.
 
-8. Results
+## 8. Results
 
 The table below reports the average scores of three stitching methods under three MLLMs. Higher scores indicate better perceptual stitching quality.
 
-  Dimension   	GLM-4.5V Reconstruction	GLM-4.5V Seam	GLM-4.5V Ours	GPT-5-nano Reconstruction	GPT-5-nano Seam	GPT-5-nano Ours	Qwen2.5-VL Reconstruction	Qwen2.5-VL Seam	Qwen2.5-VL Ours
-  Artifacts   	                  4.655	        4.804	        4.824	                    4.153	          4.152	          4.172	                    3.995	          4.030	          3.987
-  Illumination	                  4.573	        4.744	        4.778	                    4.380	          4.401	          4.397	                    4.415	          4.434	          4.460
-  Detail      	                  4.566	        4.728	        4.770	                    4.271	          4.298	          4.324	                    4.191	          4.198	          4.202
-  Structural  	                  4.807	        4.821	        4.825	                    4.587	          4.607	          4.594	                    4.245	          4.250	          4.306
-  Total       	                  4.652	        4.774	        4.799	                    4.348	          4.365	          4.371	                    4.212	          4.228	          4.239
+| Dimension | GLM-4.5V Reconstruction | GLM-4.5V Seam | GLM-4.5V Ours | GPT-5-nano Reconstruction | GPT-5-nano Seam | GPT-5-nano Ours | Qwen2.5-VL Reconstruction | Qwen2.5-VL Seam | Qwen2.5-VL Ours |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Artifacts | 4.655 | 4.804 | 4.824 | 4.153 | 4.152 | 4.172 | 3.995 | 4.030 | 3.987 |
+| Illumination | 4.573 | 4.744 | 4.778 | 4.380 | 4.401 | 4.397 | 4.415 | 4.434 | 4.460 |
+| Detail | 4.566 | 4.728 | 4.770 | 4.271 | 4.298 | 4.324 | 4.191 | 4.198 | 4.202 |
+| Structural | 4.807 | 4.821 | 4.825 | 4.587 | 4.607 | 4.594 | 4.245 | 4.250 | 4.306 |
+| Total | 4.652 | 4.774 | 4.799 | 4.348 | 4.365 | 4.371 | 4.212 | 4.228 | 4.239 |
 
 Across the three MLLMs, URsNet obtains the best total score. This consistency suggests that the conclusion is not dependent on a single model.
 
-9. Additional Validation
+## 9. Additional Validation
 
 To complement the MLLM-based scores, we also evaluated the stitched results using NIQE, a no-reference image quality metric where a lower score indicates better perceptual quality. The obtained NIQE scores are:
 
-  Method        	  NIQE
-  Reconstruction	16.085
-  Seam          	15.808
-  Ours          	15.665
+| Method | NIQE |
+|---|---:|
+| Reconstruction | 16.085 |
+| Seam | 15.808 |
+| Ours | 15.665 |
 
 The NIQE ranking is consistent with the MLLM-based total-score ranking, providing additional support that the MLLM scores reflect meaningful quality differences rather than only prompt- or model-specific behavior.
 
-10. Notes on Reliability
+## 10. Notes on Reliability
 
 This protocol is designed to improve reliability in four ways:
 
